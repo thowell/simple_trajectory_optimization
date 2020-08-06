@@ -1,1 +1,1 @@
-# simple_trajectory_optimization
+# Simple trajectory optimization
