@@ -1,32 +1,17 @@
 using Ipopt, MathOptInterface
-using ForwardDiff
 const MOI = MathOptInterface
+using ForwardDiff
 
-struct ProblemIpopt <: MOI.AbstractNLPEvaluator
-    n_nlp
-    m_nlp
-    idx_ineq
-    sparsity_jac
-    sparsity_hess
-    primal_bounds
-    constraint_bounds
+# user should define obj, con!
+function obj(x)
+    @error "objective not defined"
 end
 
-function ProblemIpopt(n_nlp,m_nlp;
-        idx_ineq=(1:0),
-        sparsity_jac=sparsity_jacobian(n_nlp,m_nlp),
-        sparsity_hess=sparsity_hessian(n_nlp,m_nlp),
-        primal_bounds=primal_bounds(n_nlp),
-        constraint_bounds=constraint_bounds(m_nlp,idx_ineq=idx_ineq))
-
-    ProblemIpopt(n_nlp,m_nlp,
-        idx_ineq,
-        sparsity_jac,
-        sparsity_hess,
-        primal_bounds,
-        constraint_bounds)
+function con!(c,x)
+    @error "constraints not defined"
 end
 
+# user can overwrite primal_bounds, constraint_bounds
 function primal_bounds(n)
     x_l = -Inf*ones(n)
     x_u = Inf*ones(n)
@@ -41,12 +26,32 @@ function constraint_bounds(m; idx_ineq=(1:0))
     return c_l, c_u
 end
 
-function obj(x)
-    @error "objective not defined"
+struct ProblemIpopt <: MOI.AbstractNLPEvaluator
+    n_nlp
+    m_nlp
+    idx_ineq
+    sparsity_jac
+    sparsity_hess
+    primal_bounds
+    constraint_bounds
+    hessian_lagrangian
 end
 
-function con!(c,x)
-    @error "constraints not defined"
+function ProblemIpopt(n_nlp,m_nlp;
+        idx_ineq=(1:0),
+        sparsity_jac=sparsity_jacobian(n_nlp,m_nlp),
+        sparsity_hess=sparsity_hessian(n_nlp,m_nlp),
+        primal_bounds=primal_bounds(n_nlp),
+        constraint_bounds=constraint_bounds(m_nlp,idx_ineq=idx_ineq),
+        hessian_lagrangian=false)
+
+    ProblemIpopt(n_nlp,m_nlp,
+        idx_ineq,
+        sparsity_jac,
+        sparsity_hess,
+        primal_bounds,
+        constraint_bounds,
+        hessian_lagrangian)
 end
 
 function MOI.eval_objective(prob::MOI.AbstractNLPEvaluator, x)
@@ -88,6 +93,7 @@ function row_col_cartesian!(row,col,r,c)
     return row, col
 end
 
+# user can overwrite sparsity_jacobian and sparsity_hessian
 function sparsity_jacobian(n,m)
 
     row = []
@@ -100,8 +106,6 @@ function sparsity_jacobian(n,m)
 
     return collect(zip(row,col))
 end
-sparsity_jacobian(prob::MOI.AbstractNLPEvaluator) = sparsity_jacobian(prob.n_nlp,prob.m_nlp)
-
 
 function sparsity_hessian(n,m)
 
@@ -116,12 +120,19 @@ function sparsity_hessian(n,m)
     return collect(zip(row,col))
 end
 
-MOI.features_available(prob::MOI.AbstractNLPEvaluator) = [:Grad, :Jac]
+function MOI.features_available(prob::MOI.AbstractNLPEvaluator)
+    if prob.hessian_lagrangian
+        return [:Grad, :Jac, :Hess]
+    else
+        return [:Grad, :Jac]
+    end
+end
 MOI.initialize(prob::MOI.AbstractNLPEvaluator, features) = nothing
 MOI.jacobian_structure(prob::MOI.AbstractNLPEvaluator) = prob.sparsity_jac
-MOI.hessian_lagrangian_structure(prob::MOI.AbstractNLPEvaluator) = nothing
+MOI.hessian_lagrangian_structure(prob::MOI.AbstractNLPEvaluator) = prob.sparsity_hess
 function MOI.eval_hessian_lagrangian(prob::MOI.AbstractNLPEvaluator, H, x, σ, λ)
     tmp(z) = σ*obj(z) + con!(zeros(eltype(z),prob.m_nlp),z)'*λ
+
     H .= vec(ForwardDiff.hessian(tmp,x))
     return nothing
 end
@@ -138,6 +149,7 @@ function solve(x0,prob::MOI.AbstractNLPEvaluator;
         solver = Ipopt.Optimizer()
         solver.options["max_iter"] = max_iter
         solver.options["tol"] = tol
+        solver.options["constr_viol_tol"] = c_tol
     elseif nlp == :snopt
         solver = SNOPT7.Optimizer()
     end

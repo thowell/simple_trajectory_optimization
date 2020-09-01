@@ -75,7 +75,7 @@ function con!(c,z)
 
     # final condition
     c[shift .+ (1:n)] = x[T] - xF
-    return nothing
+    return c
 end
 
 N = n*T + m*(T-1) # number of decision variables
