@@ -1,46 +1,30 @@
 using Ipopt, MathOptInterface
+using ForwardDiff
 const MOI = MathOptInterface
 
 struct ProblemIpopt <: MOI.AbstractNLPEvaluator
     n_nlp
     m_nlp
-    obj
-    ∇obj!
-    con!
-    ∇con!
     idx_ineq
-    enable_hessian::Bool
     sparsity_jac
-    reshape_jac::Bool
+    sparsity_hess
     primal_bounds
+    constraint_bounds
 end
 
-function ProblemIpopt(n_nlp,m_nlp,obj,con!,enable_hessian;
+function ProblemIpopt(n_nlp,m_nlp;
         idx_ineq=(1:0),
         sparsity_jac=sparsity_jacobian(n_nlp,m_nlp),
-        reshape_jac=true,
-        primal_bounds=primal_bounds(n_nlp))
-    ∇obj!(g,z) = ForwardDiff.gradient!(g,obj,z)
-    ∇con!(∇c,z) = ForwardDiff.jacobian!(∇c,con!,zeros(eltype(z),m_nlp),z)
-    ProblemIpopt(n_nlp,m_nlp,obj,∇obj!,con!,∇con!,
-        idx_ineq,
-        enable_hessian,
-        sparsity_jac,
-        reshape_jac,
-        primal_bounds)
-end
+        sparsity_hess=sparsity_hessian(n_nlp,m_nlp),
+        primal_bounds=primal_bounds(n_nlp),
+        constraint_bounds=constraint_bounds(m_nlp,idx_ineq=idx_ineq))
 
-function ProblemIpopt(n_nlp,m_nlp,obj,∇obj!,con!,∇con!,enable_hessian;
-        idx_ineq=(1:0),
-        sparsity_jac=sparsity_jacobian(n_nlp,m_nlp),
-        reshape_jac=true,
-        primal_bounds=primal_bounds(n_nlp))
-    ProblemIpopt(n_nlp,m_nlp,obj,∇obj!,con!,∇con!,
+    ProblemIpopt(n_nlp,m_nlp,
         idx_ineq,
-        enable_hessian,
         sparsity_jac,
-        reshape_jac,
-        primal_bounds)
+        sparsity_hess,
+        primal_bounds,
+        constraint_bounds)
 end
 
 function primal_bounds(n)
@@ -49,30 +33,39 @@ function primal_bounds(n)
     return x_l, x_u
 end
 
-function constraint_bounds(prob::MOI.AbstractNLPEvaluator)
-    c_l = zeros(prob.m_nlp)
-    c_l[prob.idx_ineq] .= -Inf
-    c_u = zeros(prob.m_nlp)
+function constraint_bounds(m; idx_ineq=(1:0))
+    c_l = zeros(m)
+    c_l[idx_ineq] .= -Inf
+
+    c_u = zeros(m)
     return c_l, c_u
 end
 
+function obj(x)
+    @error "objective not defined"
+end
+
+function con!(c,x)
+    @error "constraints not defined"
+end
+
 function MOI.eval_objective(prob::MOI.AbstractNLPEvaluator, x)
-    prob.obj(x)
+    obj(x)
 end
 
 function MOI.eval_objective_gradient(prob::MOI.AbstractNLPEvaluator, grad_f, x)
-    prob.∇obj!(grad_f,x)
+    ForwardDiff.gradient!(grad_f,obj,x)
     return nothing
 end
 
 function MOI.eval_constraint(prob::MOI.AbstractNLPEvaluator,g,x)
-    prob.con!(g,x)
+    con!(g,x)
     return nothing
 end
 
 function MOI.eval_constraint_jacobian(prob::MOI.AbstractNLPEvaluator, jac, x)
-    # prob.∇con!(reshape(jac,prob.m_nlp,prob.n_nlp),x)
-    prob.∇con!(jac,x)
+    ForwardDiff.jacobian!(reshape(jac,prob.m_nlp,prob.n_nlp),
+        con!,zeros(prob.m_nlp),x)
 
     return nothing
 end
@@ -110,13 +103,13 @@ end
 sparsity_jacobian(prob::MOI.AbstractNLPEvaluator) = sparsity_jacobian(prob.n_nlp,prob.m_nlp)
 
 
-function sparsity_hessian(prob::MOI.AbstractNLPEvaluator)
+function sparsity_hessian(n,m)
 
     row = []
     col = []
 
-    r = 1:prob.n_nlp
-    c = 1:prob.n_nlp
+    r = 1:m
+    c = 1:n
 
     row_col!(row,col,r,c)
 
@@ -128,16 +121,15 @@ MOI.initialize(prob::MOI.AbstractNLPEvaluator, features) = nothing
 MOI.jacobian_structure(prob::MOI.AbstractNLPEvaluator) = prob.sparsity_jac
 MOI.hessian_lagrangian_structure(prob::MOI.AbstractNLPEvaluator) = nothing
 function MOI.eval_hessian_lagrangian(prob::MOI.AbstractNLPEvaluator, H, x, σ, λ)
-    tmp(z) = σ*prob.obj(z) + prob.con!(zeros(eltype(z),prob.m_nlp),z)'*λ
+    tmp(z) = σ*obj(z) + con!(zeros(eltype(z),prob.m_nlp),z)'*λ
     H .= vec(ForwardDiff.hessian(tmp,x))
-    # println("eval hessian lagrangian")
     return nothing
 end
 
 function solve(x0,prob::MOI.AbstractNLPEvaluator;
-        tol=1.0e-6,nlp=:ipopt,max_iter=1000)
+        tol=1.0e-6,c_tol=1.0e-6,nlp=:ipopt,max_iter=1000)
     x_l, x_u = prob.primal_bounds
-    c_l, c_u = constraint_bounds(prob)
+    c_l, c_u = prob.constraint_bounds
 
     nlp_bounds = MOI.NLPBoundsPair.(c_l,c_u)
     block_data = MOI.NLPBlockData(nlp_bounds,prob,true)

@@ -1,5 +1,5 @@
 using LinearAlgebra, Plots
-include("ipopt.jl")
+include("src/ipopt.jl")
 
 """
 min (xT-xF)' QF (xT-xF) + Σ (xt - xF)' Qt (xt - xF) + ut' Rt ut
@@ -81,7 +81,7 @@ end
 N = n*T + m*(T-1) # number of decision variables
 M = n*(T+1) # number of constraints
 
-prob = ProblemIpopt(N,M,obj,con!,true) # set up optimization problem for Ipopt
+prob = ProblemIpopt(N,M) # set up optimization problem for Ipopt
 
 z0 = rand(N) # initialize w/ random decision variables
 
