@@ -11,6 +11,14 @@ function con!(c,x)
     @error "constraints not defined"
 end
 
+function ∇obj!(g,x)
+    @error "objective gradient not defined"
+end
+
+function ∇con!(j,x)
+    @error "constraints Jacobian not defined"
+end
+
 # user can overwrite primal_bounds, constraint_bounds
 function primal_bounds(n)
     x_l = -Inf*ones(n)
@@ -26,27 +34,33 @@ function constraint_bounds(m; idx_ineq=(1:0))
     return c_l, c_u
 end
 
-struct ProblemIpopt <: MOI.AbstractNLPEvaluator
-    n_nlp
-    m_nlp
+struct ProblemMOI <: MOI.AbstractNLPEvaluator
+    n_nlp::Int
+    m_nlp::Int
     idx_ineq
+    obj_grad::Bool
+    con_jac::Bool
     sparsity_jac
     sparsity_hess
     primal_bounds
     constraint_bounds
-    hessian_lagrangian
+    hessian_lagrangian::Bool
 end
 
-function ProblemIpopt(n_nlp,m_nlp;
+function ProblemMOI(n_nlp,m_nlp;
         idx_ineq=(1:0),
+        obj_grad=false,
+        con_jac=false,
         sparsity_jac=sparsity_jacobian(n_nlp,m_nlp),
         sparsity_hess=sparsity_hessian(n_nlp,m_nlp),
         primal_bounds=primal_bounds(n_nlp),
         constraint_bounds=constraint_bounds(m_nlp,idx_ineq=idx_ineq),
         hessian_lagrangian=false)
 
-    ProblemIpopt(n_nlp,m_nlp,
+    ProblemMOI(n_nlp,m_nlp,
         idx_ineq,
+        obj_grad,
+        con_jac,
         sparsity_jac,
         sparsity_hess,
         primal_bounds,
@@ -59,7 +73,7 @@ function MOI.eval_objective(prob::MOI.AbstractNLPEvaluator, x)
 end
 
 function MOI.eval_objective_gradient(prob::MOI.AbstractNLPEvaluator, grad_f, x)
-    ForwardDiff.gradient!(grad_f,obj,x)
+    prob.obj_grad ? ∇obj!(grad_f,x) : ForwardDiff.gradient!(grad_f,obj,x)
     return nothing
 end
 
@@ -69,8 +83,12 @@ function MOI.eval_constraint(prob::MOI.AbstractNLPEvaluator,g,x)
 end
 
 function MOI.eval_constraint_jacobian(prob::MOI.AbstractNLPEvaluator, jac, x)
-    ForwardDiff.jacobian!(reshape(jac,prob.m_nlp,prob.n_nlp),
+    if prob.con_jac
+        ∇con!(jac,x)
+    else
+        ForwardDiff.jacobian!(reshape(jac,prob.m_nlp,prob.n_nlp),
         con!,zeros(prob.m_nlp),x)
+    end
 
     return nothing
 end
@@ -152,6 +170,9 @@ function solve(x0,prob::MOI.AbstractNLPEvaluator;
         solver.options["constr_viol_tol"] = c_tol
     elseif nlp == :snopt
         solver = SNOPT7.Optimizer()
+        @warn "SNOPT user options not setup"
+    else
+        @error "NLP solver not setup"
     end
 
     x = MOI.add_variables(solver,prob.n_nlp)
