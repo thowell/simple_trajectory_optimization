@@ -5,4 +5,4 @@ Examples setting up trajectory optimization problems in Julia using [Ipopt](http
 TODO:
 - [X] sparsity example
 - [ ] Hessian of Lagrangian example
-- [ ] ModelingToolKit.jl
+- [X] ModelingToolKit.jl
