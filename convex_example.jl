@@ -31,7 +31,8 @@ u_sol = [z_sol[idx_u[t]] for t = 1:T-1]
 # state trajectory
 plot(x_sol,v_sol,aspect_ratio=:equal,width=2.0,
     xlabel="position x", ylabel="velocity v",
-    title="Double integrator state trajectory")
+    title="Double integrator state trajectory",
+    label="trajectory")
 plot!([x_sol[1]],[v_sol[1]],marker=:circle,label="start",
     color=:red)
 plot!([x_sol[T]],[v_sol[T]],marker=:circle,label="end",

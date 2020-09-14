@@ -123,13 +123,16 @@ v_sol = [z_sol[idx_x[t][2]] for t = 1:T]
 u_sol = [z_sol[idx_u[t]] for t = 1:T-1]
 
 # state trajectory
-plot(x_sol,v_sol,aspect_ratio=:equal,width=2.0,
+plt = plot(x_sol,v_sol,aspect_ratio=:equal,width=2.0,
     xlabel="position x", ylabel="velocity v",
-    title="Double integrator state trajectory")
-plot!([x_sol[1]],[v_sol[1]],marker=:circle,label="start",
+    title="Double integrator state trajectory",
+    label="trajectory")
+plt = plot!([x_sol[1]],[v_sol[1]],marker=:circle,label="start",
     color=:red)
-plot!([x_sol[T]],[v_sol[T]],marker=:circle,label="end",
+plt = plot!([x_sol[T]],[v_sol[T]],marker=:circle,label="end",
     color=:green)
+
+savefig(plt,"/home/taylor/Research/thowell.github.io/images/simple_traj.png")
 
 # control trajectory
 plot(range(0,stop=Δt*T,length=T),hcat(u_sol...,u_sol[end])',width=2.0,linetype=:steppost,
