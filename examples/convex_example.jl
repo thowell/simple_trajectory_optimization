@@ -13,7 +13,8 @@ problem = minimize(objective) # setup problem
 
 # constraint setup
 for t = 1:T-1
-    problem.constraints += z[idx_x[t+1]] - (A[t]*z[idx_x[t]] + B[t]*z[idx_u[t]]) == 0.0
+    (problem.constraints
+        += z[idx_x[t+1]] - (A[t]*z[idx_x[t]] + B[t]*z[idx_u[t]]) == 0.0)
 end
 problem.constraints += z[idx_x[1]] - x1 == 0.0
 problem.constraints += z[idx_x[T]] - xF == 0.0
@@ -39,5 +40,6 @@ plot!([x_sol[T]],[v_sol[T]],marker=:circle,label="end",
     color=:green)
 
 # control trajectory
-plot(range(0,stop=Δt*T,length=T),hcat(u_sol...,u_sol[end])',width=2.0,linetype=:steppost,
+plot(range(0,stop=Δt*T,length=T),
+    hcat(u_sol...,u_sol[end])',width=2.0,linetype=:steppost,
     label="",xlabel="time (s)",title="Double integrator control (ZOH)")

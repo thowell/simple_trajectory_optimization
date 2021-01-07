@@ -135,5 +135,6 @@ plt = plot!([x_sol[T]],[v_sol[T]],marker=:circle,label="end",
 savefig(plt,"/home/taylor/Research/thowell.github.io/images/simple_traj.png")
 
 # control trajectory
-plot(range(0,stop=Δt*T,length=T),hcat(u_sol...,u_sol[end])',width=2.0,linetype=:steppost,
+plot(range(0,stop=Δt*T,length=T),
+    hcat(u_sol...,u_sol[end])',width=2.0,linetype=:steppost,
     label="",xlabel="time (s)",title="Double integrator control (ZOH)")
