@@ -1,7 +1,7 @@
-#NOTE: get latest version of ModelingToolkit.jl
+#NOTE: get latest version of Symbolics.jl
 
 using Plots
-include(joinpath(pwd(),"src/moi_mtk.jl"))
+include(joinpath(pwd(),"src/moi_symbolics.jl"))
 
 # Problem
 include(joinpath(pwd(),"src/problem.jl"))
@@ -47,9 +47,9 @@ function con!(c,z)
     return c
 end
 
-function lag(z,y)
+function lag(z,y,σ)
     c0 = zeros(eltype(z),length(y))
-    L = obj(z)
+    L = σ * obj(z)
 
     x = [z[idx_x[t]] for t = 1:T]
     u = [z[idx_u[t]] for t = 1:T-1]
@@ -70,39 +70,34 @@ function lag(z,y)
     return L
 end
 
-lag(rand(N),rand(M))
+lag(rand(N),rand(M),1.0)
 
 # generate fast functions
-@variables x_sym[1:N], c_sym[1:M]
-@parameters y_sym[1:M]
+@variables x_sym[1:N], c_sym[1:M], y_sym[1:M], σ_sym
 
 J = obj(x_sym);
-obj_fast! = eval(ModelingToolkit.build_function([J],x_sym,
-            parallel=ModelingToolkit.MultithreadedForm())[2])
-∇obj_sparsity = ModelingToolkit.sparsejacobian([J],x_sym)
-∇obj_fast! = eval(ModelingToolkit.build_function(∇obj_sparsity,x_sym,
-            parallel=ModelingToolkit.MultithreadedForm())[2])
+obj_fast! = eval(Symbolics.build_function([J],x_sym,
+            parallel=Symbolics.MultithreadedForm())[2])
+∇obj_sparsity = Symbolics.gradient([J],x_sym)
+∇obj_fast! = eval(Symbolics.build_function(∇obj_sparsity,x_sym)[2])
 ∇obj_fast = similar(∇obj_sparsity,Float64)
 
 con!(c_sym,x_sym)
-c_fast! = eval(ModelingToolkit.build_function(simplify.(c_sym),x_sym,
-            parallel=ModelingToolkit.MultithreadedForm())[2])
-∇c_sparsity = ModelingToolkit.sparsejacobian(simplify.(c_sym),x_sym)
-∇c_fast! = eval(ModelingToolkit.build_function(∇c_sparsity,x_sym,
-            parallel=ModelingToolkit.MultithreadedForm())[2])
+c_fast! = eval(Symbolics.build_function(simplify.(c_sym),x_sym)[2])
+∇c_sparsity = Symbolics.sparsejacobian(simplify.(c_sym),x_sym)
+∇c_fast! = eval(Symbolics.build_function(∇c_sparsity,x_sym)[2])
 ∇c_fast = similar(∇c_sparsity,Float64)
 
-dL = lag(x_sym,y_sym);
+dL = lag(x_sym,y_sym,σ_sym);
 
-∇²L_sparsity = ModelingToolkit.sparsehessian(simplify.(dL),x_sym)
-∇²L_fast! = eval(ModelingToolkit.build_function(∇²L_sparsity,x_sym,y_sym,
-            parallel=ModelingToolkit.MultithreadedForm())[2])
+∇²L_sparsity = Symbolics.sparsehessian(simplify.(dL),x_sym)
+∇²L_fast! = eval(Symbolics.build_function(∇²L_sparsity,x_sym,y_sym,σ_sym)[2])
 ∇²L_fast = similar(∇²L_sparsity,Float64)
 
 moi_f = obj
 moi_c! = con!
 
-prob = ProblemMTK(N,M,
+prob = ProblemS(N,M,
            (-Inf*ones(N),Inf*ones(N)),
            (zeros(M),zeros(M)),
            sparsity(∇c_sparsity),
@@ -131,8 +126,6 @@ plt = plot!([x_sol[1]],[v_sol[1]],marker=:circle,label="start",
     color=:red)
 plt = plot!([x_sol[T]],[v_sol[T]],marker=:circle,label="end",
     color=:green)
-
-savefig(plt,"/home/taylor/Research/thowell.github.io/images/simple_traj.png")
 
 # control trajectory
 plot(range(0,stop=Δt*T,length=T),

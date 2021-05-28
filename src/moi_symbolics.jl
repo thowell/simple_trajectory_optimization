@@ -1,9 +1,9 @@
-using LinearAlgebra, ModelingToolkit, ForwardDiff, SparseArrays, StaticArrays
+using LinearAlgebra, Symbolics, ForwardDiff, SparseArrays, StaticArrays
 using Ipopt
 using MathOptInterface
 const MOI = MathOptInterface
 
-struct ProblemMTK <: MOI.AbstractNLPEvaluator
+struct ProblemS <: MOI.AbstractNLPEvaluator
     n
     m
     primal_bounds
@@ -16,7 +16,7 @@ struct ProblemMTK <: MOI.AbstractNLPEvaluator
     enable_hessian::Bool
 end
 
-function ProblemMTK(n,m,
+function ProblemS(n,m,
         primal_bounds,
         constraint_bounds,
         jacobian_sparsity,
@@ -24,7 +24,7 @@ function ProblemMTK(n,m,
         ∇obj_fast,∇c_fast,∇²L_fast;
         enable_hessian=true)
 
-    ProblemMTK(n,m,
+    ProblemS(n,m,
             primal_bounds,
             constraint_bounds,
             jacobian_sparsity,
@@ -55,7 +55,7 @@ function MOI.eval_constraint_jacobian(prob::MOI.AbstractNLPEvaluator, jac, x)
 end
 
 function MOI.eval_hessian_lagrangian(prob::MOI.AbstractNLPEvaluator, H, x, σ, λ)
-    ∇²L_fast!(prob.∇²L_fast,x,λ)
+    ∇²L_fast!(prob.∇²L_fast,x,λ,σ)
     H .= prob.∇²L_fast.nzval
 
     return nothing
